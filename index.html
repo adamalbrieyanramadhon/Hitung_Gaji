@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekap Gaji Nurfadhila</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h2 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .action-bar {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .btn-print { background-color: #007bff; }
+        .btn-reset { background-color: #dc3545; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #c1c1c1;
+            padding: 10px 5px;
+            text-align: center;
+        }
+        th {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        
+        input[type="radio"], input[type="checkbox"] {
+            transform: scale(1.3);
+            cursor: pointer;
+        }
+
+        .special-date {
+            background-color: #fff3cd !important;
+        }
+        .bonus-label {
+            font-weight: bold;
+            color: #856404;
+            font-size: 0.85em;
+        }
+
+        .total-row {
+            background-color: #28a745 !important;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        @media print {
+            .action-bar, .no-print { display: none; }
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border: none; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Rekap Gaji Nurfadhila</h2>
+    
+    <div class="action-bar">
+        <button onclick="resetData()" class="btn btn-reset">Reset Data</button>
+        <button onclick="window.print()" class="btn btn-print">Simpan PDF / Cetak</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 10%;">Tgl</th>
+                <th style="width: 15%;">9 Jam<br><small>100rb</small></th>
+                <th style="width: 15%;">12 Jam<br><small>120rb</small></th>
+                <th style="width: 15%;">Libur<br><small>100rb</small></th>
+                <th style="width: 15%;">Bonus x2<br><small>(Khusus Tgl 25)</small></th>
+                <th style="width: 30%;">Bayaran</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="5" style="text-align: right; padding-right: 15px;">TOTAL GAJI:</td>
+                <td id="grandTotal">Rp 0</td>
+            </tr>
+        </tfoot>
+    </table>
+    <p style="font-size: 0.8em; color: #666; margin-top: 10px;">* Centang kolom Bonus x2 pada tanggal 25 jika mendapatkan lembur/bonus ganda.</p>
+</div>
+
+<script>
+    const PRICE_9_JAM = 100000;
+    const PRICE_12_JAM = 120000;
+    const PRICE_LIBUR = 100000;
+
+    const dateSequence = [
+        21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+    ];
+
+    const tableBody = document.getElementById('tableBody');
+    const grandTotalEl = document.getElementById('grandTotal');
+
+    const formatRupiah = (num) => {
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
+    };
+
+    function renderTable() {
+        tableBody.innerHTML = '';
+        const savedData = JSON.parse(localStorage.getItem('gajiDataV3')) || {};
+
+        dateSequence.forEach((date, index) => {
+            const tr = document.createElement('tr');
+            if (date === 25) tr.classList.add('special-date');
+
+            const rowData = savedData[index] || { status: 0, isBonus: false };
+            
+            // Kolom Bonus khusus tanggal 25
+            let bonusColumn = '<td>-</td>';
+            if (date === 25) {
+                bonusColumn = `
+                    <td>
+                        <input type="checkbox" id="bonus_${index}" 
+                        ${rowData.isBonus ? 'checked' : ''} 
+                        onchange="updateBonus(${index})">
+                        <br><span class="bonus-label">Ya</span>
+                    </td>`;
+            }
+
+            tr.innerHTML = `
+                <td>${date}</td>
+                <td><input type="radio" name="row_${index}" value="1" ${rowData.status == 1 ? 'checked' : ''} onchange="updateStatus(${index}, 1)"></td>
+                <td><input type="radio" name="row_${index}" value="2" ${rowData.status == 2 ? 'checked' : ''} onchange="updateStatus(${index}, 2)"></td>
+                <td><input type="radio" name="row_${index}" value="3" ${rowData.status == 3 ? 'checked' : ''} onchange="updateStatus(${index}, 3)"></td>
+                ${bonusColumn}
+                <td id="subtotal_${index}" data-value="0">Rp 0</td>
+            `;
+            tableBody.appendChild(tr);
+            calculateRow(index, rowData.status, rowData.isBonus, date);
+        });
+        calculateGrandTotal();
+    }
+
+    window.updateStatus = function(index, status) {
+        const savedData = JSON.parse(localStorage.getItem('gajiDataV3')) || {};
+        const isBonus = savedData[index] ? savedData[index].isBonus : false;
+        
+        savedData[index] = { status: status, isBonus: isBonus };
+        localStorage.setItem('gajiDataV3', JSON.stringify(savedData));
+        
+        calculateRow(index, status, isBonus, dateSequence[index]);
+        calculateGrandTotal();
+    };
+
+    window.updateBonus = function(index) {
+        const checkbox = document.getElementById(`bonus_${index}`);
+        const savedData = JSON.parse(localStorage.getItem('gajiDataV3')) || {};
+        const currentStatus = savedData[index] ? savedData[index].status : 0;
+
+        savedData[index] = { status: currentStatus, isBonus: checkbox.checked };
+        localStorage.setItem('gajiDataV3', JSON.stringify(savedData));
+
+        calculateRow(index, currentStatus, checkbox.checked, dateSequence[index]);
+        calculateGrandTotal();
+    };
+
+    function calculateRow(index, status, isBonus, date) {
+        let pay = 0;
+        if (status == 1) pay = PRICE_9_JAM;
+        if (status == 2) pay = PRICE_12_JAM;
+        if (status == 3) pay = PRICE_LIBUR;
+
+        // Jika tanggal 25 dan checkbox dicentang, kalikan 2
+        if (date === 25 && isBonus && pay > 0) {
+            pay = pay * 2;
+        }
+
+        const cell = document.getElementById(`subtotal_${index}`);
+        cell.innerText = formatRupiah(pay);
+        cell.dataset.value = pay;
+    }
+
+    function calculateGrandTotal() {
+        let total = 0;
+        dateSequence.forEach((_, index) => {
+            const val = document.getElementById(`subtotal_${index}`).dataset.value || 0;
+            total += parseInt(val);
+        });
+        grandTotalEl.innerText = formatRupiah(total);
+    }
+
+    window.resetData = function() {
+        if(confirm("Hapus semua data rekap gaji?")) {
+            localStorage.removeItem('gajiDataV3');
+            renderTable();
+        }
+    }
+
+    renderTable();
+</script>
+
+</body>
+</html>
